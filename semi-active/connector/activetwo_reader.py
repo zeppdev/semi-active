@@ -11,13 +11,13 @@ def activetwo_reader(queue):
     # TCP/IP setup
     TCP_IP = '127.0.0.1'  # ActiView is running on the same PC
     TCP_PORT = 778  # This is the port ActiView listens on
-    DRAW_BUFFER_SIZE = 1536  # Data packet size (32 channels @ 512Hz)
+    INPUT_RATE = 1536  # Data packet size (32 channels @ 512Hz)
 
     # Open socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((TCP_IP, TCP_PORT))
 
-    print 'BioSemi ActiveTwo reader process is running'
+    print('BioSemi ActiveTwo reader process is running')
 
     # The reader process will run until the main process kills it
     while True:
@@ -28,8 +28,8 @@ def activetwo_reader(queue):
         # Read the next packet from the network
         # sometimes there is an error and packet is smaller than needed, read until get a good one
         data = []
-        while len(data) != DRAW_BUFFER_SIZE:
-            data = s.recv(DRAW_BUFFER_SIZE)
+        while len(data) != INPUT_RATE:
+            data = s.recv(INPUT_RATE)
 
         # Extract 16 samples from the packet (ActiView sends them in 16-sample chunks)
         for m in range(16):
@@ -50,4 +50,4 @@ def activetwo_reader(queue):
         for sample in signal_buffer:
             queue.put(sample)
 
-    print 'BioSemi ActiveTwo reader process has stopped'
+    print('BioSemi ActiveTwo reader process has stopped')
