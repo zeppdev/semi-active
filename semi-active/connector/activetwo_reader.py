@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import socket
 
 def activetwo_reader(queue):
@@ -12,7 +11,7 @@ def activetwo_reader(queue):
     # TCP/IP setup
     TCP_IP = '127.0.0.1'  # ActiView is running on the same PC
     TCP_PORT = 778  # This is the port ActiView listens on
-    BUFFER_SIZE = 1536  # Data packet size (32 channels @ 512Hz)
+    DRAW_BUFFER_SIZE = 1536  # Data packet size (32 channels @ 512Hz)
 
     # Open socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,8 +28,8 @@ def activetwo_reader(queue):
         # Read the next packet from the network
         # sometimes there is an error and packet is smaller than needed, read until get a good one
         data = []
-        while len(data) != BUFFER_SIZE:
-            data = s.recv(BUFFER_SIZE)
+        while len(data) != DRAW_BUFFER_SIZE:
+            data = s.recv(DRAW_BUFFER_SIZE)
 
         # Extract 16 samples from the packet (ActiView sends them in 16-sample chunks)
         for m in range(16):
