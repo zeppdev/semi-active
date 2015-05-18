@@ -1,71 +1,78 @@
-import dummy_reader
-import activetwo_reader
 import collections
-import queue
 
-INPUT_RATE = 512.0
-DRAW_INTERVAL = 50
-PLOT_SIZE = 500  # in milliseconds
-CHANNELS = 32
-
-DUMMY = True  # use dummy reader producing random data
-
-
-reader = dummy_reader if DUMMY else activetwo_reader
-plot_deque = collections.deque([], PLOT_SIZE)
-
-
-from pyqtgraph.Qt import QtGui, QtCore
+from PyQt4 import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
 
-# QtGui.QApplication.setGraphicsSystem('raster')
-app = QtGui.QApplication([])
-# mw = QtGui.QMainWindow()
-# mw.resize(800,800)
+import sys
+from connector import activetwo_reader, dummy_reader
+from ui import PlotWindow
+from ui.PlotWindow import Ui_MainWindow
+import queue
+from IPython.html.widgets.widget_bool import Checkbox
+from PyQt4.QtCore import SIGNAL
 
-win = pg.GraphicsWindow(title="Plot ActiveTwo input")
-win.resize(1000, 600)
-win.setWindowTitle('pyqtgraph example: Plotting')
-pg.setConfigOptions(antialias=True)
+class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
+    INPUT_RATE = 512.0
+    DRAW_INTERVAL = 50
+    PLOT_SIZE = 5000  # in milliseconds
+    CHANNEL_NUMBER = 32
 
-plot = win.addPlot(title="Updating plot")
-curve = plot.plot(pen='y')
-ptr = 0
+    DUMMY = True  # use dummy reader producing random data
+    CHANNELS = np.zeros(32)
+    reader = dummy_reader if DUMMY else activetwo_reader
+    plot_deque = collections.deque([], PLOT_SIZE)
 
-def update():
-    read_data(plot_deque, signal_buffer)
-    # power spectrum
-    sp = np.abs(np.fft.fft(plot_deque)) ** 2
-    sp[0] = 0  # eliminate DC component
-    curve.setData(sp)
-signal_buffer = queue.Queue()
-reader.activetwo_reader(signal_buffer)
-timer = QtCore.QTimer()
-timer.timeout.connect(update)
-timer.start(DRAW_INTERVAL)
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        PlotWindow.Ui_MainWindow.__init__(self)
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.ui.checkBox.clicked.connect(self.setChannel)
+        #===============================================================================================================================================================================================
+        # win = pg.GraphicsWindow(title="Plot ActiveTwo input")
+        # win.resize(1000, 600)
+        # win.setWindowTitle('pyqtgraph example: Plotting')
+        pg.setConfigOptions(antialias=True)
+        #===============================================================================================================================================================================================
+        # TODO better do this in QtDesigner
+        # l = QtGui.QVBoxLayout()
+        # self.ui.tab.setLayout(l)
+        plot = pg.PlotWidget(self.ui.graphicsView, name='Plot1')
+        plot.resize(800, 540)
+        # plot = self.tab.addPlot(title="Updating plot")
 
-def read_data(plot_deque, signal_buffer):
-    for i in range(int(INPUT_RATE * CHANNELS * DRAW_INTERVAL / 1000.0)):
-        data = signal_buffer.get()
-        if i % 32 == 0:
-            plot_deque.append(data)
+        self.curve = plot.plot(pen='y')
+        self.signal_buffer = queue.Queue()
+        self.reader.activetwo_reader(self.signal_buffer)
+        timer = QtCore.QTimer(self)
+        self.connect(timer, SIGNAL("timeout()"), self.update)
+        timer.start(self.DRAW_INTERVAL)
+
+    def setChannel(self):
+        checkbox = self.sender()
+        nr = int(checkbox.text()) - 1
+        self.CHANNELS[nr] = checkbox.isChecked()
+
+    def update(self):
+        self.read_data(self.plot_deque, self.signal_buffer)
+        if(len(self.plot_deque) > 0):
+            # power spectrum
+            sp = np.abs(np.fft.fft(self.plot_deque)) ** 2
+            sp[0] = 0  # eliminate DC component
+            self.curve.setData(sp)
+
+    def read_data(self, plot_deque, signal_buffer):
+        for i in range(int(self.INPUT_RATE * self.CHANNEL_NUMBER * self.DRAW_INTERVAL / 1000.0)):
+            data = signal_buffer.get()
+            if self.CHANNELS[i % len(self.CHANNELS)] == 1:
+                plot_deque.append(data)
 
 # # Start Qt event loop unless running in interactive mode or using pyside.
 if __name__ == '__main__':
-    QtGui.QApplication.instance().exec_()
-#=======================================================================================================================================================================================================
-# def update(frames, line, signal_buffer):
-#     start = time.time();
-#     read_data(plot_deque, signal_buffer)
-#     line.set_ydata(np.append(line.get_ydata(), plot_deque))
-#     # print("reading data: " + str(time.time() - start))
-#     start = time.time();
-#     # print("plotting data: " + str(time.time() - start))
-#     return line,
-#=======================================================================================================================================================================================================
+    app = QtGui.QApplication(sys.argv)
+    mw = MyPlot()
+    mw.show()
+    sys.exit(app.exec_())
+    # QtGui.QApplication.instance().exec_()
 
-
-# if __name__ == '__main__':
-#    animate()
-# def animate():
