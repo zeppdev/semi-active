@@ -16,11 +16,11 @@ def reader(queue):
             periodic_bias = (64 - (i / CHANNEL_NUMBER) % 64) * 0.02
 
             # should show up in power spectrum
-            if (i / CHANNEL_NUMBER % 5000 < 1000):
-                periodic_bias *= 0.1
+            # if (i / CHANNEL_NUMBER % 5000 < 1000):
+            #    periodic_bias *= 0.1
             # simulate higher channels having stronger signal
             channel_bias = (i % CHANNEL_NUMBER) * 0.05
-            queue.put(random.gauss(0.75 + channel_bias + periodic_bias, 0.25))
+            queue.put(channel_bias + periodic_bias + random.gauss(0.75, 0.25))
         diff = time.time() - start
         # print("writing data: "+ str(diff))
         if(diff < PERIOD_OF_INPUT):
