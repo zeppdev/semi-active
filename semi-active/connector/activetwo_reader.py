@@ -1,7 +1,13 @@
 import numpy as np
 import socket
+import threading
+
 
 def activetwo_reader(queue):
+    readerThread = threading.Thread(target=reader, args=[queue])
+    readerThread.start()
+
+def reader(queue):
     """
     Self-contained function to read BioSemi ActiveTwo device
     Is run as separate process using multiprocessing module
@@ -11,7 +17,8 @@ def activetwo_reader(queue):
     # TCP/IP setup
     TCP_IP = '127.0.0.1'  # ActiView is running on the same PC
     TCP_PORT = 778  # This is the port ActiView listens on
-    INPUT_RATE = 1536  # Data packet size (32 channels @ 512Hz)
+    INPUT_RATE = 384  # Data packet size (32 channels @ 512Hz)
+    SAMPLES = 4
 
     # Open socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -23,7 +30,7 @@ def activetwo_reader(queue):
     while True:
 
         # Create a 16-sample signal_buffer
-        signal_buffer = np.zeros((32, 16))
+        signal_buffer = np.zeros((32, SAMPLES))
 
         # Read the next packet from the network
         # sometimes there is an error and packet is smaller than needed, read until get a good one
@@ -32,17 +39,16 @@ def activetwo_reader(queue):
             data = s.recv(INPUT_RATE)
 
         # Extract 16 samples from the packet (ActiView sends them in 16-sample chunks)
-        for m in range(16):
+        
+        for m in range(SAMPLES):
 
             # extract samples for each channel
             for ch in range(32):
                 offset = m * 3 * 32 + (ch * 3)
-
                 # The 3 bytes of each sample arrive in reverse order
-                sample = (ord(data[offset + 2]) << 16)
-                sample += (ord(data[offset + 1]) << 8)
-                sample += ord(data[offset])
-
+                sample = data[offset + 2] << 16
+                sample += data[offset + 1] << 8
+                sample += data[offset]
                 # Store sample to signal buffer
                 signal_buffer[ch, m] = sample
 

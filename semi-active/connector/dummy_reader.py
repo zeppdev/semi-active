@@ -10,6 +10,7 @@ def activetwo_reader(queue):
 
 def reader(queue):
     while True:
+        sample = [None] * CHANNEL_NUMBER
         start = time.time();
         for i in range(CHANNEL_NUMBER):
             # simulate periodicity, ought to be a (reverse?) sawtooth
@@ -20,7 +21,8 @@ def reader(queue):
             #    periodic_bias *= 0.1
             # simulate higher channels having stronger signal
             channel_bias = (i % CHANNEL_NUMBER) * 0.05
-            queue.put(channel_bias + periodic_bias + random.gauss(0.75, 0.25))
+            sample[i] = channel_bias + periodic_bias + random.gauss(0.75, 0.25)
+        queue.put(sample)
         diff = time.time() - start
         # print("writing data: "+ str(diff))
         if(diff < PERIOD_OF_INPUT):
