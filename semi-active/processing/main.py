@@ -19,9 +19,9 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
     INPUT_RATE = 512
     DRAW_INTERVAL = 25
     NR_OF_CHANNELS = 32
-    TIME_PLOT_SIZE = 512  # in milliseconds
+    TIME_PLOT_SIZE = 128  # in milliseconds
 
-    DUMMY = True  # use dummy reader producing random data
+    DUMMY = True  # use dummy reader
     reader = dummy_reader if DUMMY else activetwo_reader
 
 
@@ -54,7 +54,7 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
             self.ui.tab_2.CHANNEL_DEQUES[i] = collections.deque([], self.TIME_PLOT_SIZE)
 
         # init timer and signals
-        self.signal_buffer = queue.Queue(maxsize=1)
+        self.signal_buffer = queue.Queue(maxsize=1000)
         self.reader.activetwo_reader(self.signal_buffer)
         timer = QtCore.QTimer(self)
 
@@ -75,7 +75,7 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
             checkbox.setObjectName("checkBox_" + str(tab) + "_" + str(i))
             checkbox.setText(str(i + 1))
             checkbox.clicked.connect(partial(self.checkBoxClickedCallback, tab))
-            checkbox.setChecked(True)
+            checkbox.setChecked(tab.CHECKBOX_TOGGLE)
             tab.CHECKBOXES[i] = checkbox
             layout.addWidget(checkbox, i / 8, i % 8, 1, 1)
         button.clicked.connect(partial(self.setAllChannels, tab))
@@ -89,11 +89,9 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
         self.ui.spinBox_2.valueChanged.connect(self.spinBox2Callback)
 
     def spinBoxCallback(self):
-        print(self.ui.spinBox.value(), self.ui.spinBox_2.value())
         self.ui.spinBox_2.setMinimum(self.sender().value() + 1)
 
     def spinBox2Callback(self):
-        print(self.ui.spinBox.value(), self.ui.spinBox_2.value())
         self.ui.spinBox.setMaximum(self.sender().value() - 1)
 
     def setAllChannels(self, tab):
@@ -112,13 +110,18 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
     def setChannel(self, tab, channel, checked):
         tab.CHANNEL_SELECTIONS[channel] = checked
         tab.NR_OF_CHANNELS_SELECTED = np.count_nonzero(tab.CHANNEL_SELECTIONS)
+        
+        size = len(tab.CHANNEL_DEQUES[0])
+        for i in range(len(tab.CHANNEL_DEQUES)):
+            tab.CHANNEL_DEQUES[i] = collections.deque([], size)
 
     def update(self, functions):
         idx = self.ui.tabWidget.currentIndex()
         tab = self.ui.tabWidget.currentWidget()
             # power spectrum
         self.read_data(tab.CHANNEL_DEQUES, self.signal_buffer)
-        functions[idx](tab)
+        if tab.NR_OF_CHANNELS_SELECTED > 0:
+            functions[idx](tab)
 
             # sp = np.abs(np.fft.fft(self.plot_deque)) ** 2
             # time_step = 1 / self.INPUT_RATE
@@ -127,38 +130,41 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
             # self.curve.setData(freqs[idx], sp[idx])
 
     def updatePlot1(self, tab):
-        if tab.NR_OF_CHANNELS_SELECTED > 0:
-            fft_powers = np.ndarray((self.NR_OF_CHANNELS, self.INPUT_RATE / 2))
-            for j in range(self.NR_OF_CHANNELS):
-                if tab.CHANNEL_SELECTIONS[j] == 1:
-                    sp = np.abs(np.fft.fft(detrend(tab.CHANNEL_DEQUES[j]), 512))
-                    sp = sp[0:256]
-                    fft_powers[j] = sp.real
-            tab.plot.curve.setData(np.average(fft_powers, 0, weights=fft_powers.astype(bool)))
+        fft_powers = self.fftByChannel(tab)
+        average = np.average(fft_powers, 0)
+        tab.plot.curve.setData(average)
+
 
     def updatePlot2(self, tab):
+        fft_powers = self.fftByChannel(tab)
+        _, yData = tab.plot.curve.getData()
+        averages = np.average(fft_powers, 0)
+        # print(np.shape(averages))
         top = self.ui.spinBox.value()
         bottom = self.ui.spinBox_2.value()
-        if tab.NR_OF_CHANNELS_SELECTED > 0:
-            fft_powers = np.ndarray((self.NR_OF_CHANNELS, self.INPUT_RATE / 2))
-            for j in range(self.NR_OF_CHANNELS):
-                if tab.CHANNEL_SELECTIONS[j] == 1:
-                    sp = np.abs(np.fft.fft(detrend(tab.CHANNEL_DEQUES[j]), 512))
-                    sp = sp[0:256]
-                    fft_powers[j] = sp.real
-            _, yData = tab.plot.curve.getData()
-            averages = np.average(fft_powers, 0, weights=fft_powers.astype(bool))
-            # print(np.shape(averages))
-            yData = np.append(yData, np.average(averages[top:bottom]))
-            print(yData)
-            # print(np.average(fft_powers[top:bottom]))
-            tab.plot.curve.setData(y=yData[-self.TIME_PLOT_SIZE:])
+        yData = np.append(yData, np.average(averages[top:bottom]))
+        # print(np.average(fft_powers[top:bottom]))
+        tab.plot.curve.setData(y=yData[-self.TIME_PLOT_SIZE:])
 
     def read_data(self, plot_deque, signal_buffer):
         for _ in range(int(self.INPUT_RATE * self.DRAW_INTERVAL / 1000.0)):
             data = signal_buffer.get()
             for j in range(self.NR_OF_CHANNELS):
                 plot_deque[j].append(data[j])
+    
+    def fftByChannel(self, tab):
+        fft_powers = np.ndarray((self.NR_OF_CHANNELS, self.INPUT_RATE / 2 - 1))
+        for j in range(self.NR_OF_CHANNELS):
+            if tab.CHANNEL_SELECTIONS[j] == 1:
+                sp = np.abs(np.fft.fft(detrend(tab.CHANNEL_DEQUES[j]), 512))
+                sp = sp[1:256]
+                sp_real = sp.real
+                fft_powers[j] = 10*np.log10(sp_real.clip(min=0.000001))
+                #fft_powers[j] = sp_real.clip(min=0.000001)
+            else:
+                # TODO - this is a hack to not get all-zero arrays in the result
+                fft_powers[j] = [0.0000001]*255
+        return fft_powers
 # helpers
 def reject_outliers(data, m=2.):
     d = np.abs(data - np.median(data))
@@ -172,4 +178,3 @@ if __name__ == '__main__':
     mw = MyPlot()
     mw.show()
     sys.exit(app.exec_())
-
