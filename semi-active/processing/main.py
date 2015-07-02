@@ -19,7 +19,7 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
     INPUT_RATE = 512
     DRAW_INTERVAL = 25
     NR_OF_CHANNELS = 32
-    TIME_PLOT_SIZE = 128  # in milliseconds
+    TIME_PLOT_SIZE = 128
 
     DUMMY = True  # use dummy reader
     reader = dummy_reader if DUMMY else activetwo_reader
@@ -43,6 +43,14 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
         self.ui.tab_2.plot.resize(950, 540)
         self.ui.tab.plot.curve = self.ui.tab.plot.plot(pen='y')
         self.ui.tab_2.plot.curve = self.ui.tab_2.plot.plot(pen='y', y=[0] * self.TIME_PLOT_SIZE)
+
+        self.ui.tab_2.plot.getPlotItem().getAxis('bottom').setScale(self.INPUT_RATE / 10000)
+
+        self.ui.tab.plot.setLabel('bottom', "Frequency", units='Hz')
+        self.ui.tab.plot.setLabel('left', "Power averaged over channels")
+
+        self.ui.tab_2.plot.setLabel('bottom', "Time", units='s')
+        self.ui.tab_2.plot.setLabel('left', "Power averaged over channels and frequencies")
 
         # init buffers
         self.ui.tab.CHANNEL_DEQUES = [None] * self.NR_OF_CHANNELS
@@ -110,7 +118,7 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
     def setChannel(self, tab, channel, checked):
         tab.CHANNEL_SELECTIONS[channel] = checked
         tab.NR_OF_CHANNELS_SELECTED = np.count_nonzero(tab.CHANNEL_SELECTIONS)
-        
+
         size = len(tab.CHANNEL_DEQUES[0])
         for i in range(len(tab.CHANNEL_DEQUES)):
             tab.CHANNEL_DEQUES[i] = collections.deque([], size)
@@ -151,7 +159,7 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
             data = signal_buffer.get()
             for j in range(self.NR_OF_CHANNELS):
                 plot_deque[j].append(data[j])
-    
+
     def fftByChannel(self, tab):
         fft_powers = np.ndarray((self.NR_OF_CHANNELS, self.INPUT_RATE / 2 - 1))
         for j in range(self.NR_OF_CHANNELS):
@@ -159,11 +167,11 @@ class MyPlot(QtGui.QMainWindow, PlotWindow.Ui_MainWindow):
                 sp = np.abs(np.fft.fft(detrend(tab.CHANNEL_DEQUES[j]), 512))
                 sp = sp[1:256]
                 sp_real = sp.real
-                fft_powers[j] = 10*np.log10(sp_real.clip(min=0.000001))
-                #fft_powers[j] = sp_real.clip(min=0.000001)
+                fft_powers[j] = 10 * np.log10(sp_real.clip(min=0.000001))
+                # fft_powers[j] = sp_real.clip(min=0.000001)
             else:
                 # TODO - this is a hack to not get all-zero arrays in the result
-                fft_powers[j] = [0.0000001]*255
+                fft_powers[j] = [0.0000001] * 255
         return fft_powers
 # helpers
 def reject_outliers(data, m=2.):
